@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from torch_geometric.data import Data, Dataset
 from torch_geometric.transforms import ToUndirected
+from torch_geometric.transforms import ToUndirected
 
 class TCMDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None):
@@ -18,7 +19,7 @@ class TCMDataset(Dataset):
         processed_dir = os.path.join(root, 'processed')
         self.herb_herb_edge_index = torch.from_numpy(
             np.load(os.path.join(processed_dir, 'herb_herb_edge_index.npy'))
-        ).long()
+        ).long() 
         self.symptom_symptom_edge_index = torch.from_numpy(
             np.load(os.path.join(processed_dir, 'symptom_symptom_edge_index.npy'))
         ).long()
@@ -30,34 +31,30 @@ class TCMDataset(Dataset):
         self.num_herbs = self.herb_herb_edge_index.max().item() + 1
         self.num_symptoms = self.symptom_symptom_edge_index.max().item() + 1
         
-        # 创建异构图数据
-        self.data = self._create_heterogeneous_graph()
+        self.herb_graph = self._create_herb_graph()
+        self.symptom_graph = self._create_symptom_graph()
+        self.cross_graph = self._create_cross_graph()
         
         # 加载处方数据
         self.prescriptions = np.load(os.path.join(processed_dir, 'prescriptions.npy'), allow_pickle=True)
     
-    def _create_heterogeneous_graph(self):
-        # 创建节点特征（这里使用简单的one-hot编码，您可以根据需要修改）
-        herb_x = torch.eye(self.num_herbs)
-        symptom_x = torch.eye(self.num_symptoms)
-        
-        # 创建异构图数据对象
-        data = Data()
-        
-        # 添加节点特征
-        data.herb_x = herb_x
-        data.symptom_x = symptom_x
-        
-        # 添加边索引
-        data.herb_herb_edge_index = self.herb_herb_edge_index
-        data.symptom_symptom_edge_index = self.symptom_symptom_edge_index
-        data.herb_symptom_edge_index = self.herb_symptom_edge_index
-        
-        # 确保所有边都是无向的
-        to_undirected = ToUndirected()
-        data = to_undirected(data)
-        
-        return data
+    def _create_herb_graph(self):
+        """药材-药材图 (ID从0开始)"""
+        herb_features = torch.randn(self.num_herbs, 64)
+        edge_index = self.herb_herb_edge_index
+        return ToUndirected()(Data(x=herb_features, edge_index=edge_index))
+    
+    def _create_symptom_graph(self):
+        """症状-症状图 (ID从0开始)"""
+        symptom_features = torch.randn(self.num_symptoms, 64)
+        edge_index = self.symptom_symptom_edge_index
+        return ToUndirected()(Data(x=symptom_features, edge_index=edge_index))
+    
+    def _create_cross_graph(self):
+        """跨域二分图 (药材和症状ID统一编码)"""
+        cross_features = torch.randn(self.num_herbs + self.num_symptoms, 64)
+        edge_index = self.herb_symptom_edge_index
+        return ToUndirected()(Data(x=cross_features, edge_index=edge_index))
     
     def len(self):
         return 1

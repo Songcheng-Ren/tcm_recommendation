@@ -17,6 +17,10 @@ def build_graphs_from_prescriptions(data_dir):
     with open(os.path.join(data_dir, 'raw', 'pre_symptoms.txt'), 'r') as f:
         symptoms_data = [list(map(int, line.strip().split())) for line in f.readlines()]
     
+    # 计算全局ID偏移量（症状的最大ID + 1）
+    max_symptom_id = max([s for sub in symptoms_data for s in sub]) if symptoms_data else 0
+    GLOBAL_ID_OFFSET = max_symptom_id + 1  # 关键修改点
+
     # 初始化共现频率字典
     herb_herb_freq = defaultdict(int)
     symptom_symptom_freq = defaultdict(int)
@@ -27,6 +31,7 @@ def build_graphs_from_prescriptions(data_dir):
     
     # 统计共现频率和收集处方数据
     for herbs, symptoms in zip(herbs_data, symptoms_data):
+        adjusted_herbs = [hid + GLOBAL_ID_OFFSET for hid in herbs]
         # 保存处方数据
         prescriptions.append({
             'symptoms': symptoms,
@@ -45,10 +50,10 @@ def build_graphs_from_prescriptions(data_dir):
                 edge = tuple(sorted([symptoms[i], symptoms[j]]))
                 symptom_symptom_freq[edge] += 1
         
-        # herb-symptom关系
-        for herb in herbs:
+        # herb-symptom关系（药材使用偏移后的ID）
+        for herb in adjusted_herbs:
             for symptom in symptoms:
-                edge = (herb, symptom)
+                edge = (herb, symptom)  # 药材ID已偏移
                 herb_symptom_freq[edge] += 1
     
     # 转换为edge_index格式
@@ -79,3 +84,7 @@ def build_graphs_from_prescriptions(data_dir):
     print(f"症状-症状边数量: {symptom_symptom_edge_index.shape[1]}")
     print(f"药材-症状边数量: {herb_symptom_edge_index.shape[1]}")
     print(f"处方数量: {len(prescriptions)}")
+    print("关键修改验证:")
+    print(f"症状ID范围: 0 ~ {max_symptom_id}")
+    print(f"药材ID偏移量: {GLOBAL_ID_OFFSET}")
+    print(f"调整后的药材-症状边示例: {herb_symptom_edge_index[:,0] if herb_symptom_edge_index.size > 0 else '无'}")
