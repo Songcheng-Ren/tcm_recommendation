@@ -169,7 +169,7 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     
     # 训练循环
-    best_val_f1 = 0
+    best_metric = -float('inf')
     patience_counter = 0
     
     for epoch in range(config.num_epochs):
@@ -195,12 +195,27 @@ def main():
         print(f"Val Metrics: Precision={eval_metrics['p@5']:.4f}, {eval_metrics['p@10']:.4f}, {eval_metrics['p@20']:.4f}"
               f"Recall={eval_metrics['r@5']:.4f}, {eval_metrics['r@10']:.4f}, {eval_metrics['r@20']:.4f}")
         
+        # 验证阶段后添加早停判断
+        current_metric = eval_metrics['r@10']  # 选择召回率@10作为监控指标
         
+        if current_metric > best_metric:
+            print(f"发现新的最佳模型：{current_metric:.4f} -> {best_metric:.4f}")
+            best_metric = current_metric
+            patience_counter = 0
+            torch.save(model, os.path.join(project_root, 'checkpoints/best_model_checkpoint.pth'))
+            torch.save(dataset, os.path.join(project_root, 'checkpoints/best_dataset_checkpoint.pth'))
+        else:
+            patience_counter += 1
+            print(f"早停计数器：{patience_counter}/{config.early_stopping_patience}")
+            if patience_counter >= config.early_stopping_patience:
+                print("达到早停条件，终止训练")
+                break
         
         
     
     # 加载最佳模型进行测试
-    model.load_state_dict(torch.load(os.path.join(project_root, 'best_model.pth')))
+    dataset = torch.load(os.path.join(project_root, 'checkpoints/best_dataset_checkpoint.pth'))
+    model.load_state_dict(torch.load(os.path.join(project_root, 'checkpoints/best_model_checkpoint.pth')))
     test_metrics = evaluate(model, test_loader, config)
     
     print("\n测试集结果:")

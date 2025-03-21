@@ -59,5 +59,6 @@ class TCMDataset(Dataset):
     def len(self):
         return 1
     
-    def get(self, idx):
+    def get(self):
         return self.data
+    
