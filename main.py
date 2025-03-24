@@ -108,6 +108,7 @@ def main():
     herb_graph = dataset.herb_graph.to(config.device)
     symptom_graph = dataset.symptom_graph.to(config.device)
     cross_graph = dataset.cross_graph.to(config.device)
+    hyper_graph = dataset.hyper_graph.to(config.device)
 
     # 准备处方数据集
     prescription_data = PrescriptionDataset(
@@ -152,8 +153,10 @@ def main():
         herb_graph=herb_graph,
         symptom_graph=symptom_graph,
         cross_graph=cross_graph,
+        hyper_graph=hyper_graph,
         num_herbs=dataset.num_herbs,
         num_symptoms=dataset.num_symptoms,
+        num_ingredients=dataset.num_ingredients,
         hidden_channels=config.hidden_channels,
         num_heads=config.num_heads,
         dropout=config.dropout
@@ -202,7 +205,7 @@ def main():
             print(f"发现新的最佳模型：{current_metric:.4f} -> {best_metric:.4f}")
             best_metric = current_metric
             patience_counter = 0
-            torch.save(model, os.path.join(project_root, 'checkpoints/best_model_checkpoint.pth'))
+            torch.save(model.state_dict(), os.path.join(project_root, 'checkpoints/best_model_checkpoint.pth'))
             torch.save(dataset, os.path.join(project_root, 'checkpoints/best_dataset_checkpoint.pth'))
         else:
             patience_counter += 1

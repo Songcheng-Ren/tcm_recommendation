@@ -2,13 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
-from torch_geometric.nn import HyperGraphConv
+from torch_geometric.nn import HypergraphConv
+from torch_scatter import scatter_mean
+
 
 class HyperGNN(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels):
         super().__init__()
-        self.conv1 = HyperGraphConv(in_channels, hidden_channels)
-        self.conv2 = HyperGraphConv(hidden_channels, out_channels)
+        self.conv1 = HypergraphConv(in_channels, hidden_channels)
+        self.conv2 = HypergraphConv(hidden_channels, out_channels)
 
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
@@ -17,7 +19,7 @@ class HyperGNN(torch.nn.Module):
         return x
     
 class TCMRecommender(nn.Module):
-    def __init__(self, herb_graph, symptom_graph, cross_graph, num_herbs, num_symptoms, hidden_channels=64, num_heads=4, dropout=0.2):
+    def __init__(self, herb_graph, symptom_graph, cross_graph, hyper_graph, num_herbs, num_symptoms, num_ingredients, hidden_channels=64, num_heads=4, dropout=0.2):
         """
         基于GAT的中医处方推荐模型
         
@@ -37,6 +39,7 @@ class TCMRecommender(nn.Module):
         self.herb_graph = herb_graph
         self.symptom_graph = symptom_graph
         self.cross_graph = cross_graph
+        self.hyper_graph = hyper_graph
         self.num_herbs = num_herbs
         self.num_symptoms = num_symptoms
         self.hidden_channels = hidden_channels
@@ -67,7 +70,9 @@ class TCMRecommender(nn.Module):
             batch_first=True
         )
         
-        self.hyper_gnn = HyperGNN(hidden_channels, hidden_channels * 2, hidden_channels)
+        # 新增超图处理分支
+        self.hyper_gnn = HyperGNN(hidden_channels, hidden_channels, hidden_channels)
+        self.hyper_proj = nn.Linear(hidden_channels*2, hidden_channels)  # 特征融合层
         
         self.predictor = nn.Sequential(
             nn.Linear(self.num_herbs, self.num_herbs * 2),
@@ -105,6 +110,14 @@ class TCMRecommender(nn.Module):
         cross_x = F.elu(self.cross_gat1(cross_x, self.cross_graph.edge_index))
         cross_x = self.dropout(cross_x)
         cross_x = F.elu(self.cross_gat2(cross_x, self.cross_graph.edge_index))
+
+        # 超图学习分支
+        hyper_x = self.hyper_gnn(self.hyper_graph.x, self.hyper_graph.edge_index)
+
+        # 超边聚合（将成分特征聚合为草药特征）
+        herb_from_hyper = scatter_mean(hyper_x, 
+                                 self.hyper_graph.hyper_edge_mapping, 
+                                 dim=0, dim_size=self.num_herbs) 
         
         # --- 特征融合 ---
         # 分割跨域特征
@@ -113,7 +126,7 @@ class TCMRecommender(nn.Module):
         
         # 加权融合
         final_symptoms = symptom_x + cross_symptoms      # [num_symptoms, hidden]
-        final_herbs = herb_x + cross_herbs               # [num_herbs, hidden]
+        final_herbs = herb_x + cross_herbs + herb_from_hyper               # [num_herbs, hidden]
         
         # --- 多热编码交互 ---
         # 症状特征加权平均 [batch_size, hidden]

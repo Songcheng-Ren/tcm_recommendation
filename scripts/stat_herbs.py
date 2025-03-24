@@ -19,6 +19,18 @@ def main():
     herbs_contains = load_herbs_contains()
     herb_dict = load_herb_all()
     
+    # 统计信息
+    herbs_contains_set = set(herbs_contains)
+    herb_all_set = set(herb_dict.keys())
+    common_herbs = herbs_contains_set.intersection(herb_all_set)
+    
+    print("\n统计信息:")
+    print(f"herbs_contains.txt中的草药数量: {len(herbs_contains_set)}")
+    print(f"herb_all.xlsx中的草药数量: {len(herb_all_set)}")
+    print(f"两个文件中都存在的草药数量: {len(common_herbs)}")
+    print(f"仅在contains中存在的草药数量: {len(herbs_contains_set - herb_all_set)}")
+    print(f"仅在all中存在的草药数量: {len(herb_all_set - herbs_contains_set)}")
+
     # 创建输出目录
     os.makedirs('../data/processed', exist_ok=True)
     
